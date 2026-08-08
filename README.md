@@ -1,12 +1,10 @@
 # Farmer Eye AI
 
-Farmer Eye AI is a strawberry disease detection
-and instance segmentation application.
+AI-powered Strawberry Disease Detection using
+YOLO11n-seg, Instance Segmentation and Grad-CAM.
 
-Model:
-YOLO11n-seg
+## Features
 
-Features:
 - Single image analysis
 - Multiple image analysis
 - Instance segmentation
@@ -15,7 +13,7 @@ Features:
 - Analytics
 - User feedback
 
-Run locally:
+## Run locally
 
 pip install -r requirements.txt
 
