@@ -443,13 +443,24 @@ def save_upload(uploaded_file):
 
 
 def disease_name_ar(name):
-    if not name:
+    if (
+        name is None
+        or pd.isna(name)
+        or not str(name).strip()
+        or str(name).strip().lower() in {
+            "none",
+            "nan",
+            "-"
+        }
+    ):
         return "-"
+
     diseases = [
         value.strip()
-        for value in name.split(",")
+        for value in str(name).split(",")
         if value.strip()
     ]
+
     return "، ".join(
         DISEASE_AR.get(disease, disease)
         for disease in diseases
@@ -527,15 +538,26 @@ def build_printable_report_html(
         str(status),
     )
 
+    disease_missing = (
+        disease_name is None
+        or pd.isna(disease_name)
+        or not str(disease_name).strip()
+        or str(disease_name).strip().lower() in {
+            "none",
+            "nan",
+            "-"
+        }
+    )
+
     disease_ar = (
-        disease_name_ar(
-            disease_name
-        )
-        if disease_name
-        else (
+        (
             "فراولة سليمة"
             if str(status) == "Healthy"
             else "-"
+        )
+        if disease_missing
+        else disease_name_ar(
+            disease_name
         )
     )
 
