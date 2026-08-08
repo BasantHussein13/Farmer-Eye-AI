@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 import torch
 
@@ -33,6 +34,10 @@ from modules.analytics import (
 )
 
 
+# ==============================================================================
+# Page Configuration
+# ==============================================================================
+
 st.set_page_config(
     page_title="عين المزارع | Farmer Eye AI",
     page_icon="🍓",
@@ -40,6 +45,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
+# ==============================================================================
+# Arabic Labels
+# ==============================================================================
 
 STATUS_AR = {
     "Healthy": "سليمة",
@@ -59,32 +68,52 @@ DISEASE_AR = {
 }
 
 RECOMMENDATIONS_AR = {
-    "Angular Leafspot": "اعزل الأوراق المصابة، قلل بلل الأوراق، وراقب انتشار الأعراض.",
-    "Anthracnose Fruit Rot": "أزل الثمار المصابة، تجنب ملامسة الثمار للتربة، وحسن التهوية.",
-    "Blossom Blight": "تخلص من الأزهار المصابة وحافظ على تهوية جيدة حول النبات.",
-    "Gray Mold": "أزل الأجزاء المصابة، قلل الرطوبة، وتجنب الري فوق المجموع الخضري.",
-    "Leaf Spot": "أزل الأوراق شديدة الإصابة، حسن التهوية، وراقب البقع الجديدة.",
-    "Powdery Mildew Fruit": "افصل الثمار المصابة وقلل الرطوبة الزائدة مع متابعة باقي الثمار.",
-    "Powdery Mildew Leaf": "أزل الأوراق شديدة الإصابة وحسن حركة الهواء حول النباتات.",
-    "Healthy Strawberry": "لا توجد علامات مرضية واضحة. استمر في المتابعة الدورية.",
+    "Angular Leafspot":
+        "اعزل الأوراق المصابة، قلل بلل الأوراق، وحافظ على تهوية جيدة مع متابعة تطور البقع.",
+    "Anthracnose Fruit Rot":
+        "أزل الثمار المصابة من الحقل، تجنب ملامسة الثمار للتربة، وحسن التهوية حول النباتات.",
+    "Blossom Blight":
+        "أزل الأزهار والأنسجة المتضررة وقلل الرطوبة حول النبات مع متابعة الأزهار الجديدة.",
+    "Gray Mold":
+        "أزل الأجزاء المصابة، قلل الرطوبة، وتجنب الري المباشر فوق الأوراق والثمار.",
+    "Leaf Spot":
+        "أزل الأوراق شديدة الإصابة، حسن التهوية، وراقب ظهور بقع جديدة على الأوراق.",
+    "Powdery Mildew Fruit":
+        "افصل الثمار المصابة وقلل الرطوبة الزائدة مع فحص باقي الثمار بشكل دوري.",
+    "Powdery Mildew Leaf":
+        "أزل الأوراق شديدة الإصابة وحسن حركة الهواء حول النباتات وراقب الأوراق الحديثة.",
+    "Healthy Strawberry":
+        "لا توجد علامات مرضية واضحة في الصورة. استمر في المتابعة الدورية للنبات.",
 }
 
+RISK_AR = {
+    "Healthy": "منخفض",
+    "Diseased": "يحتاج متابعة",
+    "Uncertain": "غير محدد",
+}
+
+
+# ==============================================================================
+# Styling
+# ==============================================================================
 
 st.markdown(
     """
     <style>
+
     :root {
-        --pink:#ef3f78;
-        --pink-dark:#d92f68;
-        --pink-soft:#fff2f7;
-        --pink-border:#f4c6d6;
-        --green:#2ca96b;
+        --berry:#e93672;
+        --berry-dark:#c91f59;
+        --berry-soft:#fff1f6;
+        --berry-border:#f5c8d8;
+        --green:#2eaa70;
         --green-soft:#edf9f3;
-        --navy:#25364d;
-        --text:#263238;
-        --muted:#667085;
+        --navy:#26364d;
+        --ink:#222a35;
+        --muted:#6c7480;
+        --line:#eedde4;
         --card:#ffffff;
-        --shadow:0 12px 30px rgba(42, 22, 33, .08);
+        --shadow:0 14px 38px rgba(66, 32, 47, .08);
     }
 
     html, body, [class*="css"] {
@@ -93,129 +122,125 @@ st.markdown(
 
     .stApp {
         background:
-            radial-gradient(circle at 12% 0%, #ffe4ee 0, transparent 22%),
-            linear-gradient(180deg, #fff9fb 0%, #fff5f8 55%, #ffffff 100%);
-        color: var(--text);
+            radial-gradient(circle at 8% 0%, #ffe6ef 0, transparent 22%),
+            linear-gradient(180deg, #fffafb 0%, #fff6f9 55%, #ffffff 100%);
+        color:var(--ink);
     }
 
     .block-container {
-        max-width: 1280px;
-        padding-top: 1.25rem;
-        padding-bottom: 3rem;
+        max-width:1320px;
+        padding-top:1.2rem;
+        padding-bottom:3rem;
     }
 
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #ffffff 0%, #fff6f9 100%);
-        border-left: 1px solid #f2dce4;
+        background:linear-gradient(180deg,#ffffff 0%,#fff8fa 100%);
+        border-left:1px solid var(--line);
     }
 
     section[data-testid="stSidebar"] > div {
-        padding-top: 1.2rem;
+        padding-top:1rem;
     }
 
     .side-brand {
         text-align:center;
         background:white;
-        border:1px solid #f1d4df;
+        border:1px solid var(--line);
         box-shadow:var(--shadow);
-        border-radius:24px;
-        padding:20px 14px;
+        border-radius:26px;
+        padding:22px 14px;
         margin-bottom:16px;
     }
 
-    .berry-logo {
+    .side-brand .logo {
         font-size:54px;
-        line-height:1;
-        margin-bottom:6px;
+        margin-bottom:4px;
     }
 
     .side-brand h2 {
         margin:0;
-        color:var(--pink-dark);
-        font-size:1.55rem;
-        font-weight:800;
+        color:var(--berry-dark);
+        font-weight:900;
+        font-size:1.6rem;
     }
 
     .side-brand p {
-        margin:7px 0 0 0;
         color:var(--muted);
+        margin:7px 0 0;
         font-size:.85rem;
     }
 
     .hero {
         position:relative;
         overflow:hidden;
-        border-radius:28px;
-        padding:34px 38px;
+        border-radius:30px;
+        padding:36px 40px;
         margin-bottom:24px;
-        color:white;
-        box-shadow:0 18px 45px rgba(197, 34, 91, .22);
+        color:#fff;
+        box-shadow:0 18px 48px rgba(210,35,96,.21);
         background:
-            radial-gradient(circle at 12% 25%, rgba(255,255,255,.18), transparent 17%),
-            radial-gradient(circle at 88% 15%, rgba(255,255,255,.16), transparent 19%),
-            linear-gradient(135deg, #ee2f6f 0%, #f65485 48%, #cf245c 100%);
+            radial-gradient(circle at 13% 24%,rgba(255,255,255,.17),transparent 18%),
+            radial-gradient(circle at 88% 12%,rgba(255,255,255,.13),transparent 20%),
+            linear-gradient(135deg,#ef3e78 0%,#f65386 46%,#cf245f 100%);
     }
 
     .hero:before,
     .hero:after {
         content:"🍓";
         position:absolute;
-        font-size:88px;
-        opacity:.18;
-        filter:saturate(1.1);
+        opacity:.17;
+        font-size:100px;
     }
 
     .hero:before {
-        left:28px;
-        top:8px;
+        left:24px;
+        top:0;
         transform:rotate(-12deg);
     }
 
     .hero:after {
         right:34px;
-        bottom:-18px;
-        transform:rotate(14deg);
+        bottom:-28px;
+        transform:rotate(15deg);
     }
 
     .hero h1 {
+        font-size:2.75rem;
         margin:0;
-        font-size:2.7rem;
         font-weight:900;
-        letter-spacing:-1px;
     }
 
     .hero p {
-        margin:10px 0 0 0;
-        max-width:760px;
-        font-size:1.05rem;
-        opacity:.96;
-        line-height:1.9;
+        max-width:770px;
+        margin:12px 0 0;
+        font-size:1.07rem;
+        line-height:1.95;
+        opacity:.98;
     }
 
-    .hero-badge {
+    .hero-pill {
         display:inline-block;
         margin-top:16px;
-        background:rgba(255,255,255,.18);
-        border:1px solid rgba(255,255,255,.3);
-        padding:8px 14px;
         border-radius:999px;
-        font-weight:700;
-        backdrop-filter:blur(5px);
+        padding:8px 15px;
+        background:rgba(255,255,255,.17);
+        border:1px solid rgba(255,255,255,.28);
+        font-weight:800;
     }
 
     .section-title {
         display:flex;
         align-items:center;
         justify-content:space-between;
-        gap:12px;
-        margin:8px 0 14px 0;
+        gap:14px;
+        margin:10px 0 14px;
     }
 
     .section-title h3 {
         margin:0;
-        font-size:1.25rem;
-        font-weight:800;
-        color:#2c3340;
+        font-size:1.3rem;
+        font-weight:900;
+        color:#2b3340;
     }
 
     .subtle {
@@ -223,124 +248,129 @@ st.markdown(
         font-size:.92rem;
     }
 
-    .soft-card,
-    .result-card,
-    .diagnosis-card,
-    .info-card {
-        background:var(--card);
-        border:1px solid #f0d7e0;
+    .card {
+        background:white;
+        border:1px solid var(--line);
         border-radius:22px;
         box-shadow:var(--shadow);
-    }
-
-    .soft-card {
         padding:20px;
-        min-height:140px;
     }
 
     .step-card {
+        min-height:165px;
         background:white;
-        border:1px solid #f1d9e2;
-        border-radius:20px;
+        border:1px solid var(--line);
+        border-radius:22px;
+        box-shadow:var(--shadow);
         padding:20px;
-        box-shadow:0 9px 24px rgba(45, 27, 36, .05);
-        min-height:150px;
     }
 
     .step-num {
-        width:34px;
-        height:34px;
-        border-radius:50%;
         display:inline-flex;
+        width:36px;
+        height:36px;
+        border-radius:50%;
         align-items:center;
         justify-content:center;
-        color:#fff;
-        background:linear-gradient(135deg,var(--pink),var(--pink-dark));
-        font-weight:800;
+        color:white;
+        background:linear-gradient(135deg,var(--berry),var(--berry-dark));
+        font-weight:900;
         margin-bottom:10px;
     }
 
     .step-card h4 {
-        margin:4px 0 7px 0;
-        color:#323844;
+        margin:4px 0 7px;
+        font-size:1.1rem;
     }
 
     .step-card p {
-        color:var(--muted);
-        line-height:1.7;
         margin:0;
-        font-size:.9rem;
+        color:var(--muted);
+        line-height:1.75;
+        font-size:.92rem;
     }
 
     .result-card {
+        background:white;
+        border:1px solid var(--line);
+        border-top:5px solid var(--berry);
+        border-radius:24px;
+        box-shadow:var(--shadow);
         padding:24px;
         text-align:center;
-        border-top:4px solid var(--pink);
     }
 
-    .result-card h2 {
-        margin:5px 0;
-        font-size:2rem;
-    }
-
-    .diagnosis-name {
-        color:var(--pink-dark);
-        font-size:1.45rem;
+    .result-title {
+        font-size:1.85rem;
         font-weight:900;
-        margin:8px 0;
+        margin:6px 0;
+        color:var(--navy);
+    }
+
+    .result-disease {
+        color:var(--berry-dark);
+        font-weight:900;
+        font-size:1.35rem;
+        margin:6px 0 10px;
     }
 
     .confidence-pill {
         display:inline-block;
-        margin-top:8px;
         padding:8px 14px;
         border-radius:999px;
-        background:#fff0f5;
-        color:var(--pink-dark);
-        font-weight:800;
-        border:1px solid #f7c9d9;
+        background:var(--berry-soft);
+        border:1px solid var(--berry-border);
+        color:var(--berry-dark);
+        font-weight:900;
     }
 
-    .recommendation {
+    .action-card {
         margin-top:14px;
-        padding:14px 16px;
+        padding:15px 16px;
         border-radius:16px;
         background:linear-gradient(135deg,#fffaf1,#fff5e7);
-        border:1px solid #f6ddb3;
-        color:#6a4a18;
-        line-height:1.8;
+        border:1px solid #f2ddb4;
+        color:#675024;
+        line-height:1.85;
+        text-align:right;
     }
 
     .status-good {
         color:var(--green);
-        font-weight:800;
+        font-weight:900;
     }
 
     .status-bad {
-        color:var(--pink-dark);
-        font-weight:800;
+        color:var(--berry-dark);
+        font-weight:900;
+    }
+
+    .mini-badge {
+        display:inline-block;
+        padding:5px 10px;
+        border-radius:999px;
+        background:#f5f7fa;
+        color:#58606d;
+        font-size:.8rem;
+        font-weight:700;
     }
 
     div[data-testid="stMetric"] {
         background:white;
-        border:1px solid #eed7df;
+        border:1px solid var(--line);
         border-radius:18px;
         padding:14px 16px;
-        box-shadow:0 8px 20px rgba(40, 25, 34, .05);
-    }
-
-    div[data-testid="stMetric"] label {
-        color:#697386 !important;
+        box-shadow:0 8px 20px rgba(40,25,34,.05);
     }
 
     div[data-testid="stMetricValue"] {
-        color:#26364b;
-        font-weight:800;
+        color:var(--navy);
+        font-weight:900;
     }
 
     div[data-testid="stFileUploader"] {
         background:white;
-        border:1px dashed #ef8eae;
+        border:1px dashed #ee8eae;
         border-radius:22px;
         padding:8px;
     }
@@ -350,10 +380,10 @@ st.markdown(
         min-height:48px;
         border-radius:14px;
         border:none;
-        font-weight:800;
         color:white;
-        background:linear-gradient(135deg,var(--pink),var(--pink-dark));
-        box-shadow:0 8px 18px rgba(217,47,104,.2);
+        font-weight:900;
+        background:linear-gradient(135deg,var(--berry),var(--berry-dark));
+        box-shadow:0 8px 18px rgba(217,47,104,.18);
     }
 
     .stButton > button:hover {
@@ -362,45 +392,40 @@ st.markdown(
         transform:translateY(-1px);
     }
 
-    div[data-baseweb="tab-list"] {
-        gap:8px;
-    }
-
-    button[data-baseweb="tab"] {
-        border-radius:12px;
-        padding:8px 14px;
-    }
-
     .footer {
-        margin-top:30px;
-        padding-top:16px;
-        border-top:1px solid #efdce4;
         text-align:center;
         color:#8b7480;
+        border-top:1px solid var(--line);
+        margin-top:30px;
+        padding-top:16px;
         font-size:.85rem;
     }
 
-    @media (max-width: 900px) {
-        .hero h1 {font-size:2rem;}
+    @media (max-width:900px) {
         .hero {padding:26px 22px;}
+        .hero h1 {font-size:2rem;}
     }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-def hero():
+# ==============================================================================
+# Helpers
+# ==============================================================================
+
+def render_hero():
     st.markdown(
         """
         <div class="hero">
             <h1>عين المزارع 🍓</h1>
             <p>
-                منصة ذكية لتحليل صور الفراولة والكشف المبكر عن الأمراض
-                باستخدام YOLO11n-seg مع تحديد مناطق الإصابة وGrad-CAM
-                لتفسير قرار النموذج.
+                افحص صورة الفراولة في ثوانٍ، واعرف إذا كانت سليمة أو مصابة،
+                وشاهد مكان الإصابة واحصل على إرشاد مبسط للخطوة التالية.
             </p>
-            <span class="hero-badge">YOLO11n-seg • Instance Segmentation • Grad-CAM</span>
+            <span class="hero-pill">فحص سريع • تشخيص بصري • سجل منظم • تحليلات ذكية</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -417,25 +442,69 @@ def save_upload(uploaded_file):
 def disease_name_ar(name):
     if not name:
         return "-"
-    diseases = [value.strip() for value in name.split(",") if value.strip()]
-    return "، ".join(DISEASE_AR.get(disease, disease) for disease in diseases)
+    diseases = [
+        value.strip()
+        for value in name.split(",")
+        if value.strip()
+    ]
+    return "، ".join(
+        DISEASE_AR.get(disease, disease)
+        for disease in diseases
+    )
 
 
 def main_disease_name(result):
     name = result.get("disease_name")
     if not name:
-        return "Healthy Strawberry" if result.get("status") == "Healthy" else None
+        return (
+            "Healthy Strawberry"
+            if result.get("status") == "Healthy"
+            else None
+        )
     return name.split(",")[0].strip()
 
 
 def recommendation_for(result):
     disease = main_disease_name(result)
     if disease is None:
-        return "أعد التصوير في إضاءة واضحة وبزاوية أقرب للثمرة أو الورقة."
+        return (
+            "أعد التصوير في إضاءة جيدة ومن مسافة أقرب، "
+            "وتأكد أن الثمرة أو الورقة واضحة داخل الصورة."
+        )
+
     return RECOMMENDATIONS_AR.get(
         disease,
-        "اعزل الأجزاء المشتبه بها وراقب تطور الأعراض، واستعن بمتخصص زراعي عند الحاجة.",
+        (
+            "اعزل الأجزاء المشتبه بها وراقب تطور الأعراض، "
+            "واستعن بمهندس زراعي إذا استمرت الإصابة أو توسعت."
+        ),
     )
+
+
+def confidence_label(value):
+    value = float(value)
+
+    if value >= 0.85:
+        return "ثقة عالية"
+
+    if value >= 0.70:
+        return "ثقة جيدة"
+
+    if value >= 0.50:
+        return "ثقة متوسطة"
+
+    return "ثقة منخفضة"
+
+
+def existing_path(value):
+    if value is None:
+        return None
+
+    try:
+        path = Path(str(value))
+        return path if path.exists() else None
+    except Exception:
+        return None
 
 
 def build_gradcam(result):
@@ -443,6 +512,7 @@ def build_gradcam(result):
         return None
 
     detections = result["detections"]
+
     if not detections:
         return None
 
@@ -453,47 +523,93 @@ def build_gradcam(result):
     ]
 
     target = max(
-        disease_detections if disease_detections else detections,
+        disease_detections
+        if disease_detections
+        else detections,
         key=lambda item: item["confidence"],
     )
 
-    target_class_id = int(target["class_id"])
-    image_path = Path(result["original_image_path"])
+    target_class_id = int(
+        target["class_id"]
+    )
+
+    image_path = Path(
+        result["original_image_path"]
+    )
 
     prediction = prediction_model.predict(
         source=str(image_path),
         conf=0.50,
         iou=0.70,
         imgsz=640,
-        device=0 if torch.cuda.is_available() else "cpu",
+        device=(
+            0
+            if torch.cuda.is_available()
+            else "cpu"
+        ),
         retina_masks=True,
         verbose=False,
     )[0]
 
     target_mask = None
 
-    if prediction.boxes is not None and prediction.masks is not None:
-        class_ids = (
-            prediction.boxes.cls.detach().cpu().numpy().astype(int)
-        )
-        masks = prediction.masks.data.detach().cpu().numpy()
+    if (
+        prediction.boxes is not None
+        and
+        prediction.masks is not None
+    ):
 
-        image = cv2.imread(str(image_path))
+        class_ids = (
+            prediction.boxes.cls
+            .detach()
+            .cpu()
+            .numpy()
+            .astype(int)
+        )
+
+        masks = (
+            prediction.masks.data
+            .detach()
+            .cpu()
+            .numpy()
+        )
+
+        image = cv2.imread(
+            str(image_path)
+        )
+
         if image is not None:
-            height, width = image.shape[:2]
-            indexes = np.where(class_ids == target_class_id)[0]
+
+            height, width = (
+                image.shape[:2]
+            )
+
+            indexes = np.where(
+                class_ids
+                ==
+                target_class_id
+            )[0]
 
             if len(indexes):
+
                 target_mask = np.zeros(
-                    (height, width),
+                    (
+                        height,
+                        width
+                    ),
                     dtype=np.float32,
                 )
 
                 for index in indexes:
+
                     mask = cv2.resize(
                         masks[index],
-                        (width, height),
+                        (
+                            width,
+                            height
+                        ),
                     )
+
                     target_mask = np.maximum(
                         target_mask,
                         mask,
@@ -507,24 +623,38 @@ def build_gradcam(result):
     )
 
 
-def show_result(result):
-    status_ar = STATUS_AR.get(result["status"], result["status"])
-    disease_ar = disease_name_ar(result["disease_name"])
-    recommendation = recommendation_for(result)
+def show_result(result, expert_mode=False):
+    status = result["status"]
+    status_ar = STATUS_AR.get(
+        status,
+        status
+    )
+
+    disease_ar = disease_name_ar(
+        result["disease_name"]
+    )
+
+    recommendation = recommendation_for(
+        result
+    )
+
+    confidence_text = confidence_label(
+        result["confidence"]
+    )
 
     disease_label = (
         disease_ar
-        if result["status"] == "Diseased"
+        if status == "Diseased"
         else (
             "فراولة سليمة"
-            if result["status"] == "Healthy"
+            if status == "Healthy"
             else "النتيجة غير مؤكدة"
         )
     )
 
     status_class = (
         "status-good"
-        if result["status"] == "Healthy"
+        if status == "Healthy"
         else "status-bad"
     )
 
@@ -532,12 +662,13 @@ def show_result(result):
         f"""
         <div class="result-card">
             <div class="{status_class}">{status_ar}</div>
-            <div class="diagnosis-name">{disease_label}</div>
+            <div class="result-title">{disease_label}</div>
             <span class="confidence-pill">
-                درجة الثقة {result['confidence_percentage']:.2f}%
+                {confidence_text} • {result['confidence_percentage']:.2f}%
             </span>
-            <div class="recommendation">
-                <strong>التوصية:</strong> {recommendation}
+            <div class="action-card">
+                <strong>ماذا أفعل الآن؟</strong><br>
+                {recommendation}
             </div>
         </div>
         """,
@@ -546,37 +677,63 @@ def show_result(result):
 
     st.write("")
 
-    metric_cols = st.columns(3)
-    metric_cols[0].metric(
-        "درجة الثقة",
+    cols = st.columns(3)
+
+    cols[0].metric(
+        "موثوقية التشخيص",
         f"{result['confidence_percentage']:.2f}%",
     )
-    metric_cols[1].metric(
-        "المناطق المكتشفة",
+
+    cols[1].metric(
+        "مناطق الإصابة",
         result["detected_objects"],
     )
-    metric_cols[2].metric(
-        "زمن التحليل",
-        f"{result['analysis_time_ms']:.0f} ms",
+
+    cols[2].metric(
+        "مستوى المتابعة",
+        RISK_AR.get(status, "-"),
     )
 
     gradcam_result = None
 
-    if result["status"] != "Uncertain":
+    if status != "Uncertain":
+
         try:
-            with st.spinner("جاري إنشاء Grad-CAM..."):
-                gradcam_result = build_gradcam(result)
+            with st.spinner(
+                "جاري تجهيز التفسير البصري..."
+            ):
+                gradcam_result = build_gradcam(
+                    result
+                )
+
         except Exception as error:
-            st.warning(f"تعذر إنشاء Grad-CAM لهذه الصورة: {error}")
 
-    st.markdown("### نتيجة التحليل")
+            if expert_mode:
+                st.warning(
+                    f"تعذر إنشاء Grad-CAM: {error}"
+                )
+            else:
+                st.info(
+                    "التفسير البصري غير متاح لهذه الصورة."
+                )
 
-    tab1, tab2, tab3 = st.tabs(
-        [
+    st.markdown("### صور الفحص")
+
+    if expert_mode:
+        tab_labels = [
             "الصورة الأصلية",
             "التقسيم والتشخيص",
-            "تفسير Grad-CAM",
+            "Grad-CAM",
         ]
+    else:
+        tab_labels = [
+            "الصورة الأصلية",
+            "أماكن الإصابة",
+            "لماذا أعطى النظام هذه النتيجة؟",
+        ]
+
+    tab1, tab2, tab3 = st.tabs(
+        tab_labels
     )
 
     with tab1:
@@ -591,52 +748,239 @@ def show_result(result):
             use_container_width=True,
         )
 
+        if not expert_mode:
+            st.caption(
+                "الحدود والألوان توضح المناطق التي حددها النظام داخل الصورة."
+            )
+
     with tab3:
         if gradcam_result:
+
             st.image(
                 gradcam_result["gradcam_path"],
                 use_container_width=True,
             )
-            st.caption(
-                "الخريطة توضح المناطق الأكثر تأثيرًا في قرار النموذج."
-            )
+
+            if expert_mode:
+                st.caption(
+                    "Grad-CAM يوضح المناطق الأكثر تأثيرًا في قرار النموذج."
+                )
+            else:
+                st.caption(
+                    "المناطق المضيئة هي الأجزاء التي ركز عليها النظام أثناء التشخيص."
+                )
+
         else:
-            st.info("Grad-CAM غير متاح لهذه النتيجة.")
+            st.info(
+                "لا يوجد تفسير بصري متاح لهذه النتيجة."
+            )
+
+    if expert_mode:
+        with st.expander(
+            "التفاصيل التقنية",
+            expanded=False,
+        ):
+
+            st.write(
+                f"Class: {main_disease_name(result) or '-'}"
+            )
+
+            st.write(
+                f"Confidence: {result['confidence_percentage']:.2f}%"
+            )
+
+            st.write(
+                f"Detected Objects: {result['detected_objects']}"
+            )
+
+            st.write(
+                f"Analysis Time: {result['analysis_time_ms']:.2f} ms"
+            )
+
+            detections = pd.DataFrame(
+                result["detections"]
+            )
+
+            if not detections.empty:
+                st.dataframe(
+                    detections,
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
     prediction_id = result["prediction_id"]
 
     if prediction_id is not None:
-        st.markdown("#### هل كانت النتيجة صحيحة؟")
+
+        st.markdown(
+            "#### هل كان التشخيص مفيدًا؟"
+        )
+
         feedback_cols = st.columns(2)
 
         with feedback_cols[0]:
             if st.button(
-                "نعم، النتيجة صحيحة",
+                "نعم",
                 key=f"correct_{prediction_id}",
             ):
                 update_prediction_feedback(
                     prediction_id,
                     "Correct",
                 )
-                st.success("تم تسجيل تقييمك.")
+                st.success(
+                    "تم تسجيل تقييمك."
+                )
 
         with feedback_cols[1]:
             if st.button(
-                "لا، النتيجة غير صحيحة",
+                "لا",
                 key=f"incorrect_{prediction_id}",
             ):
                 update_prediction_feedback(
                     prediction_id,
                     "Incorrect",
                 )
-                st.success("تم تسجيل تقييمك.")
+                st.success(
+                    "تم تسجيل تقييمك."
+                )
 
+
+def render_history_details(row, expert_mode=False):
+    status = str(row.get("status", ""))
+    disease = row.get("disease_name")
+
+    status_ar = STATUS_AR.get(
+        status,
+        status
+    )
+
+    confidence = float(
+        row.get("confidence", 0)
+        or 0
+    )
+
+    st.markdown(
+        f"""
+        <div class="card">
+            <span class="mini-badge">{status_ar}</span>
+            <h3 style="margin:12px 0 6px">
+                {disease_name_ar(disease) if disease else "فراولة سليمة"}
+            </h3>
+            <div class="subtle">
+                {row.get("analysis_date", "-")}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.write("")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "الثقة",
+        f"{confidence * 100:.2f}%",
+    )
+
+    c2.metric(
+        "المناطق",
+        int(
+            row.get(
+                "detected_objects",
+                0
+            )
+            or 0
+        ),
+    )
+
+    feedback_value = row.get(
+        "user_feedback"
+    )
+
+    feedback_text = (
+        "صحيحة"
+        if feedback_value == "Correct"
+        else (
+            "غير صحيحة"
+            if feedback_value == "Incorrect"
+            else "لم يتم التقييم"
+        )
+    )
+
+    c3.metric(
+        "تقييم المستخدم",
+        feedback_text,
+    )
+
+    original_path = existing_path(
+        row.get("original_image")
+    )
+
+    segmentation_path = existing_path(
+        row.get("segmentation_image")
+    )
+
+    gradcam_path = existing_path(
+        row.get("gradcam_image")
+    )
+
+    tab1, tab2, tab3 = st.tabs(
+        [
+            "الصورة الأصلية",
+            "أماكن الإصابة",
+            (
+                "Grad-CAM"
+                if expert_mode
+                else "تفسير التشخيص"
+            ),
+        ]
+    )
+
+    with tab1:
+        if original_path:
+            st.image(
+                str(original_path),
+                use_container_width=True,
+            )
+        else:
+            st.info(
+                "الصورة الأصلية غير متاحة في التخزين الحالي."
+            )
+
+    with tab2:
+        if segmentation_path:
+            st.image(
+                str(segmentation_path),
+                use_container_width=True,
+            )
+        else:
+            st.info(
+                "صورة تحديد الإصابة غير متاحة."
+            )
+
+    with tab3:
+        if gradcam_path:
+            st.image(
+                str(gradcam_path),
+                use_container_width=True,
+            )
+        else:
+            st.info(
+                "صورة تفسير التشخيص غير متاحة لهذا السجل."
+            )
+
+
+# ==============================================================================
+# Sidebar
+# ==============================================================================
 
 with st.sidebar:
+
     st.markdown(
         """
         <div class="side-brand">
-            <div class="berry-logo">🍓</div>
+            <div class="logo">🍓</div>
             <h2>عين المزارع</h2>
             <p>Farmer Eye AI</p>
         </div>
@@ -644,95 +988,148 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    user_mode = st.radio(
+        "طريقة العرض",
+        [
+            "مزارع",
+            "مهندس زراعي",
+        ],
+        horizontal=True,
+    )
+
+    expert_mode = (
+        user_mode
+        ==
+        "مهندس زراعي"
+    )
+
+    st.write("")
+
     page = st.radio(
         "القائمة",
         [
             "الرئيسية",
-            "تحليل صورة",
-            "تحليل مجموعة صور",
-            "الإحصائيات",
+            "فحص صورة",
+            "فحص مجموعة صور",
+            "التحليلات",
             "السجل",
             "عن النظام",
         ],
     )
 
     st.write("")
+
     st.markdown(
         """
-        <div class="soft-card" style="min-height:auto">
-            <strong>حالة النظام</strong><br><br>
-            <span class="status-good">● متصل وجاهز</span><br>
-            <span class="subtle">YOLO11n-seg • 640px • Confidence 50%</span>
+        <div class="card" style="padding:16px">
+            <strong>حالة الخدمة</strong><br><br>
+            <span class="status-good">● جاهز للاستخدام</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-hero()
+# ==============================================================================
+# Main App
+# ==============================================================================
+
+render_hero()
 
 
 if page == "الرئيسية":
+
     st.markdown(
         """
         <div class="section-title">
-            <h3>كيف يعمل النظام؟</h3>
-            <span class="subtle">3 خطوات بسيطة للحصول على التشخيص</span>
+            <h3>كيف تستخدم النظام؟</h3>
+            <span class="subtle">
+                ثلاث خطوات فقط للحصول على نتيجة واضحة
+            </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    cols = st.columns(3)
+    columns = st.columns(3)
 
     steps = [
         (
             "1",
             "ارفع الصورة",
-            "اختر صورة واضحة للثمرة أو الورقة بصيغة JPG أو PNG أو WEBP.",
+            "اختر صورة واضحة للثمرة أو الورقة، ويفضل أن تكون الإضاءة جيدة.",
         ),
         (
             "2",
-            "ابدأ التحليل",
-            "يحدد النموذج المرض ومناطق الإصابة باستخدام Instance Segmentation.",
+            "ابدأ الفحص",
+            "يقوم النظام بتحليل الصورة وتحديد الحالة ومكان الإصابة.",
         ),
         (
             "3",
-            "راجع النتيجة",
-            "شاهد التشخيص ونسبة الثقة وGrad-CAM والتوصية المناسبة.",
+            "راجع الإرشاد",
+            "شاهد النتيجة واقرأ الخطوة المقترحة، ويمكن للمهندس فتح التفاصيل الفنية.",
         ),
     ]
 
-    for col, (num, title, desc) in zip(cols, steps):
-        with col:
+    for column, (
+        number,
+        title,
+        description
+    ) in zip(
+        columns,
+        steps
+    ):
+
+        with column:
+
             st.markdown(
                 f"""
                 <div class="step-card">
-                    <div class="step-num">{num}</div>
+                    <div class="step-num">{number}</div>
                     <h4>{title}</h4>
-                    <p>{desc}</p>
+                    <p>{description}</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
     st.write("")
-    stats = get_general_statistics()
 
-    st.markdown("### نظرة سريعة")
+    statistics = get_general_statistics()
+
+    st.markdown(
+        "### نظرة سريعة"
+    )
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("إجمالي التحليلات", stats["total_images"])
-    c2.metric("صور سليمة", stats["healthy_images"])
-    c3.metric("صور مصابة", stats["diseased_images"])
-    c4.metric("غير مؤكدة", stats["uncertain_images"])
+
+    c1.metric(
+        "إجمالي الفحوصات",
+        statistics["total_images"],
+    )
+
+    c2.metric(
+        "حالات سليمة",
+        statistics["healthy_images"],
+    )
+
+    c3.metric(
+        "حالات مصابة",
+        statistics["diseased_images"],
+    )
+
+    c4.metric(
+        "غير مؤكدة",
+        statistics["uncertain_images"],
+    )
 
     st.markdown(
         """
-        <div class="soft-card" style="margin-top:18px">
-            <h3 style="margin-top:0">🍓 جاهز لفحص صورة فراولة؟</h3>
+        <div class="card" style="margin-top:18px">
+            <h3 style="margin-top:0">🍓 ابدأ بفحص صورة جديدة</h3>
             <p class="subtle">
-                انتقل إلى صفحة <strong>تحليل صورة</strong>،
-                ارفع الصورة ثم اضغط ابدأ التحليل.
+                افتح صفحة <strong>فحص صورة</strong>،
+                ارفع الصورة واضغط زر بدء الفحص.
             </p>
         </div>
         """,
@@ -740,83 +1137,109 @@ if page == "الرئيسية":
     )
 
 
-elif page == "تحليل صورة":
+elif page == "فحص صورة":
+
     st.markdown(
         """
         <div class="section-title">
-            <h3>تحليل صورة فراولة</h3>
-            <span class="subtle">ارفع صورة واحدة للحصول على التشخيص والتفسير البصري</span>
+            <h3>فحص صورة فراولة</h3>
+            <span class="subtle">
+                صورة واحدة واضحة تعطي أفضل نتيجة
+            </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    upload_col, info_col = st.columns([1.35, 0.65])
+    upload_col, tips_col = st.columns(
+        [1.35, .65]
+    )
 
     with upload_col:
+
         uploaded_file = st.file_uploader(
-            "اختر صورة فراولة",
-            type=["jpg", "jpeg", "png", "bmp", "webp"],
+            "اختر صورة",
+            type=[
+                "jpg",
+                "jpeg",
+                "png",
+                "bmp",
+                "webp",
+            ],
             label_visibility="collapsed",
         )
 
         if uploaded_file:
+
             st.image(
                 uploaded_file,
-                caption=uploaded_file.name,
+                caption="الصورة المختارة",
                 use_container_width=True,
             )
 
             if st.button(
-                "ابدأ التحليل",
+                "ابدأ الفحص",
                 use_container_width=True,
             ):
-                image_path = save_upload(uploaded_file)
+
+                image_path = save_upload(
+                    uploaded_file
+                )
 
                 with st.spinner(
-                    "جاري تحليل الصورة وتحديد مناطق الإصابة..."
+                    "جاري فحص الصورة..."
                 ):
+
                     result = analyze_image(
                         image_path,
                         save_to_database=True,
                     )
 
-                st.session_state["single_result"] = result
+                st.session_state[
+                    "single_result"
+                ] = result
 
-    with info_col:
+    with tips_col:
+
         st.markdown(
             """
-            <div class="soft-card">
-                <h3 style="margin-top:0">🍓 أفضل نتيجة</h3>
+            <div class="card">
+                <h3 style="margin-top:0">نصائح لصورة أفضل</h3>
                 <p class="subtle">
-                    استخدم صورة واضحة بإضاءة جيدة، وتجنب الصور المهزوزة
-                    أو البعيدة جدًا.
+                    • استخدم إضاءة جيدة<br><br>
+                    • قرب الكاميرا من الثمرة أو الورقة<br><br>
+                    • تجنب الصور المهزوزة<br><br>
+                    • اجعل الجزء المصاب ظاهرًا بوضوح
                 </p>
-                <hr style="border:none;border-top:1px solid #f0dce4">
-                <strong>النموذج</strong><br>
-                YOLO11n-seg<br><br>
-                <strong>حجم الإدخال</strong><br>
-                640 × 640<br><br>
-                <strong>حد الثقة</strong><br>
-                50%
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    if "single_result" in st.session_state:
+    if (
+        "single_result"
+        in st.session_state
+    ):
+
         st.write("")
+
         show_result(
-            st.session_state["single_result"]
+            st.session_state[
+                "single_result"
+            ],
+            expert_mode=expert_mode,
         )
 
 
-elif page == "تحليل مجموعة صور":
+elif page == "فحص مجموعة صور":
+
     st.markdown(
         """
         <div class="section-title">
-            <h3>تحليل مجموعة صور</h3>
-            <span class="subtle">ارفع عدة صور لتحليلها دفعة واحدة</span>
+            <h3>فحص مجموعة صور</h3>
+            <span class="subtle">
+                مناسب لمراجعة عدة نباتات أو ثمار دفعة واحدة
+            </span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -824,22 +1247,44 @@ elif page == "تحليل مجموعة صور":
 
     uploaded_files = st.file_uploader(
         "اختر الصور",
-        type=["jpg", "jpeg", "png", "bmp", "webp"],
+        type=[
+            "jpg",
+            "jpeg",
+            "png",
+            "bmp",
+            "webp",
+        ],
         accept_multiple_files=True,
     )
 
     if uploaded_files:
-        st.info(f"تم اختيار {len(uploaded_files)} صورة.")
 
-    if uploaded_files and st.button(
-        "تحليل جميع الصور",
-        use_container_width=True,
+        st.info(
+            f"تم اختيار {len(uploaded_files)} صورة."
+        )
+
+    if (
+        uploaded_files
+        and
+        st.button(
+            "ابدأ فحص المجموعة",
+            use_container_width=True,
+        )
     ):
-        results = []
-        progress = st.progress(0)
 
-        for index, uploaded_file in enumerate(uploaded_files):
-            image_path = save_upload(uploaded_file)
+        results = []
+
+        progress = st.progress(
+            0
+        )
+
+        for index, uploaded_file in enumerate(
+            uploaded_files
+        ):
+
+            image_path = save_upload(
+                uploaded_file
+            )
 
             results.append(
                 analyze_image(
@@ -849,102 +1294,354 @@ elif page == "تحليل مجموعة صور":
             )
 
             progress.progress(
-                (index + 1) / len(uploaded_files)
+                (
+                    index + 1
+                )
+                /
+                len(
+                    uploaded_files
+                )
             )
 
-        st.session_state["batch_results"] = results
+        st.session_state[
+            "batch_results"
+        ] = results
 
-    if "batch_results" in st.session_state:
-        results = st.session_state["batch_results"]
+    if (
+        "batch_results"
+        in st.session_state
+    ):
 
-        table = pd.DataFrame(
-            [
-                {
-                    "الصورة": result["image_name"],
-                    "الحالة": STATUS_AR.get(result["status"]),
-                    "المرض": disease_name_ar(result["disease_name"]),
-                    "الثقة %": result["confidence_percentage"],
-                    "المناطق": result["detected_objects"],
-                }
-                for result in results
-            ]
+        results = st.session_state[
+            "batch_results"
+        ]
+
+        st.markdown(
+            "### النتائج"
         )
 
-        st.dataframe(
-            table,
-            use_container_width=True,
-            hide_index=True,
-        )
+        for index, result in enumerate(
+            results
+        ):
+
+            with st.expander(
+                (
+                    f"{index + 1}. "
+                    f"{STATUS_AR.get(result['status'], result['status'])}"
+                    f" - "
+                    f"{disease_name_ar(result['disease_name'])}"
+                ),
+                expanded=False,
+            ):
+
+                preview_cols = st.columns(
+                    [1, 1.4]
+                )
+
+                with preview_cols[0]:
+
+                    st.image(
+                        result[
+                            "original_image_path"
+                        ],
+                        use_container_width=True,
+                    )
+
+                with preview_cols[1]:
+
+                    st.metric(
+                        "الثقة",
+                        f"{result['confidence_percentage']:.2f}%",
+                    )
+
+                    st.write(
+                        f"الحالة: {STATUS_AR.get(result['status'], result['status'])}"
+                    )
+
+                    st.write(
+                        f"المرض: {disease_name_ar(result['disease_name'])}"
+                    )
+
+                    st.write(
+                        f"المناطق: {result['detected_objects']}"
+                    )
 
 
-elif page == "الإحصائيات":
+elif page == "التحليلات":
+
     st.markdown(
         """
         <div class="section-title">
-            <h3>الإحصائيات</h3>
-            <span class="subtle">ملخص أداء واستخدام النظام</span>
+            <h3>لوحة التحليلات</h3>
+            <span class="subtle">
+                ملخص ذكي للحالات المسجلة
+            </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    history = get_prediction_history()
+
     statistics = get_general_statistics()
 
-    columns = st.columns(4)
-    columns[0].metric("إجمالي الصور", statistics["total_images"])
-    columns[1].metric("سليمة", statistics["healthy_images"])
-    columns[2].metric("مصابة", statistics["diseased_images"])
-    columns[3].metric("غير مؤكدة", statistics["uncertain_images"])
+    k1, k2, k3, k4 = st.columns(4)
+
+    k1.metric(
+        "إجمالي الفحوصات",
+        statistics["total_images"],
+    )
+
+    k2.metric(
+        "سليمة",
+        statistics["healthy_images"],
+    )
+
+    k3.metric(
+        "مصابة",
+        statistics["diseased_images"],
+    )
+
+    k4.metric(
+        "متوسط الثقة",
+        f"{statistics['average_confidence'] * 100:.1f}%",
+    )
 
     st.write("")
 
-    more_cols = st.columns(3)
-    more_cols[0].metric(
-        "متوسط الثقة",
-        f"{statistics['average_confidence'] * 100:.2f}%",
-    )
-    more_cols[1].metric(
-        "إجمالي المناطق",
-        statistics["total_detected_objects"],
-    )
-    more_cols[2].metric(
-        "متوسط زمن التحليل",
-        f"{statistics['average_analysis_time'] * 1000:.0f} ms",
-    )
+    if history.empty:
 
-    disease_df = get_disease_distribution()
-
-    if not disease_df.empty:
-        disease_view = disease_df.copy()
-        disease_view["average_confidence"] = (
-            disease_view["average_confidence"]
-            .fillna(0)
-            .mul(100)
-            .round(2)
+        st.info(
+            "لا توجد بيانات كافية لإنشاء التحليلات."
         )
 
-        disease_view = disease_view.rename(
-            columns={
-                "disease_name": "المرض",
-                "images": "عدد الصور",
-                "average_confidence": "متوسط الثقة %",
-            }
+    else:
+
+        history_view = history.copy()
+
+        history_view[
+            "analysis_date"
+        ] = pd.to_datetime(
+            history_view[
+                "analysis_date"
+            ],
+            errors="coerce",
         )
 
-        st.markdown("### توزيع الأمراض المكتشفة")
-        st.dataframe(
-            disease_view,
+        history_view[
+            "day"
+        ] = (
+            history_view[
+                "analysis_date"
+            ]
+            .dt.date
+            .astype(str)
+        )
+
+        status_counts = (
+            history_view[
+                "status"
+            ]
+            .value_counts()
+            .reset_index()
+        )
+
+        status_counts.columns = [
+            "status",
+            "count",
+        ]
+
+        status_counts[
+            "الحالة"
+        ] = status_counts[
+            "status"
+        ].map(
+            STATUS_AR
+        )
+
+        disease_data = history_view[
+            (
+                history_view[
+                    "status"
+                ]
+                ==
+                "Diseased"
+            )
+            &
+            history_view[
+                "disease_name"
+            ].notna()
+        ].copy()
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+
+            fig_status = px.pie(
+                status_counts,
+                names="الحالة",
+                values="count",
+                hole=.55,
+                title="توزيع الحالات",
+            )
+
+            fig_status.update_layout(
+                margin=dict(
+                    l=10,
+                    r=10,
+                    t=55,
+                    b=10,
+                ),
+                legend_title_text="",
+            )
+
+            st.plotly_chart(
+                fig_status,
+                use_container_width=True,
+            )
+
+        with chart_col2:
+
+            if not disease_data.empty:
+
+                disease_counts = (
+                    disease_data[
+                        "disease_name"
+                    ]
+                    .value_counts()
+                    .reset_index()
+                )
+
+                disease_counts.columns = [
+                    "disease",
+                    "count",
+                ]
+
+                disease_counts[
+                    "المرض"
+                ] = disease_counts[
+                    "disease"
+                ].apply(
+                    disease_name_ar
+                )
+
+                fig_disease = px.bar(
+                    disease_counts,
+                    x="count",
+                    y="المرض",
+                    orientation="h",
+                    title="أكثر الأمراض ظهورًا",
+                    labels={
+                        "count":
+                            "عدد الحالات",
+                    },
+                )
+
+                fig_disease.update_layout(
+                    margin=dict(
+                        l=10,
+                        r=10,
+                        t=55,
+                        b=10,
+                    )
+                )
+
+                st.plotly_chart(
+                    fig_disease,
+                    use_container_width=True,
+                )
+
+            else:
+
+                st.info(
+                    "لا توجد حالات مرضية كافية لعرض توزيع الأمراض."
+                )
+
+        daily_counts = (
+            history_view
+            .groupby(
+                "day"
+            )
+            .size()
+            .reset_index(
+                name="count"
+            )
+        )
+
+        fig_daily = px.line(
+            daily_counts,
+            x="day",
+            y="count",
+            markers=True,
+            title="عدد الفحوصات بمرور الوقت",
+            labels={
+                "day":
+                    "التاريخ",
+                "count":
+                    "عدد الفحوصات",
+            },
+        )
+
+        st.plotly_chart(
+            fig_daily,
             use_container_width=True,
-            hide_index=True,
         )
+
+        if not disease_data.empty:
+
+            disease_conf = (
+                disease_data
+                .groupby(
+                    "disease_name",
+                    as_index=False
+                )[
+                    "confidence"
+                ]
+                .mean()
+            )
+
+            disease_conf[
+                "المرض"
+            ] = disease_conf[
+                "disease_name"
+            ].apply(
+                disease_name_ar
+            )
+
+            disease_conf[
+                "متوسط الثقة %"
+            ] = (
+                disease_conf[
+                    "confidence"
+                ]
+                *
+                100
+            ).round(
+                2
+            )
+
+            fig_conf = px.bar(
+                disease_conf,
+                x="المرض",
+                y="متوسط الثقة %",
+                title="متوسط الثقة لكل مرض",
+            )
+
+            st.plotly_chart(
+                fig_conf,
+                use_container_width=True,
+            )
 
 
 elif page == "السجل":
+
     st.markdown(
         """
         <div class="section-title">
-            <h3>سجل التحليلات</h3>
-            <span class="subtle">آخر النتائج المحفوظة في النظام</span>
+            <h3>سجل الفحوصات</h3>
+            <span class="subtle">
+                ابحث وافتح أي فحص سابق بالتفصيل
+            </span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -953,107 +1650,319 @@ elif page == "السجل":
     history = get_prediction_history()
 
     if history.empty:
-        st.info("لا يوجد سجل تحليلات حتى الآن.")
+
+        st.info(
+            "لا يوجد سجل فحوصات حتى الآن."
+        )
+
     else:
-        display_history = history.copy()
 
-        display_history["confidence"] = (
-            display_history["confidence"]
-            .fillna(0)
-            .mul(100)
-            .round(2)
+        filter_col1, filter_col2 = st.columns(
+            2
         )
 
-        display_history["status"] = (
-            display_history["status"]
-            .map(STATUS_AR)
-            .fillna(display_history["status"])
-        )
+        with filter_col1:
 
-        display_history["disease_name"] = (
-            display_history["disease_name"]
-            .fillna("-")
-            .apply(disease_name_ar)
-        )
-
-        display_history = display_history.rename(
-            columns={
-                "id": "ID",
-                "image_name": "الصورة",
-                "analysis_date": "التاريخ",
-                "status": "الحالة",
-                "disease_name": "المرض",
-                "confidence": "الثقة %",
-                "detected_objects": "المناطق",
-                "user_feedback": "التقييم",
-            }
-        )
-
-        st.dataframe(
-            display_history[
+            status_filter = st.selectbox(
+                "الحالة",
                 [
-                    "ID",
-                    "الصورة",
-                    "التاريخ",
-                    "الحالة",
-                    "المرض",
-                    "الثقة %",
-                    "المناطق",
-                    "التقييم",
+                    "الكل",
+                    "سليمة",
+                    "مصابة",
+                    "غير مؤكدة",
+                ],
+            )
+
+        with filter_col2:
+
+            disease_options = [
+                value
+                for value
+                in history[
+                    "disease_name"
                 ]
-            ],
-            use_container_width=True,
-            hide_index=True,
-        )
+                .dropna()
+                .unique()
+                .tolist()
+                if str(value).strip()
+            ]
+
+            disease_filter = st.selectbox(
+                "المرض",
+                [
+                    "الكل",
+                ]
+                +
+                [
+                    disease_name_ar(
+                        value
+                    )
+                    for value
+                    in disease_options
+                ],
+            )
+
+        filtered = history.copy()
+
+        if status_filter != "الكل":
+
+            reverse_status = {
+                value: key
+                for key, value
+                in STATUS_AR.items()
+            }
+
+            filtered = filtered[
+                filtered[
+                    "status"
+                ]
+                ==
+                reverse_status[
+                    status_filter
+                ]
+            ]
+
+        if disease_filter != "الكل":
+
+            selected_index = [
+                disease_name_ar(
+                    value
+                )
+                for value
+                in disease_options
+            ].index(
+                disease_filter
+            )
+
+            selected_disease = disease_options[
+                selected_index
+            ]
+
+            filtered = filtered[
+                filtered[
+                    "disease_name"
+                ]
+                ==
+                selected_disease
+            ]
+
+        if filtered.empty:
+
+            st.info(
+                "لا توجد نتائج مطابقة للفلاتر الحالية."
+            )
+
+        else:
+
+            select_options = {}
+
+            for _, row in filtered.iterrows():
+
+                label = (
+                    f"فحص #{int(row['id'])} | "
+                    f"{STATUS_AR.get(str(row['status']), str(row['status']))} | "
+                    f"{disease_name_ar(row['disease_name']) if pd.notna(row['disease_name']) else 'فراولة سليمة'} | "
+                    f"{str(row['analysis_date'])}"
+                )
+
+                select_options[
+                    label
+                ] = int(
+                    row[
+                        "id"
+                    ]
+                )
+
+            selected_label = st.selectbox(
+                "اختر الفحص لعرض التفاصيل",
+                list(
+                    select_options.keys()
+                ),
+            )
+
+            selected_id = select_options[
+                selected_label
+            ]
+
+            selected_row = filtered[
+                filtered[
+                    "id"
+                ]
+                ==
+                selected_id
+            ].iloc[
+                0
+            ]
+
+            render_history_details(
+                selected_row,
+                expert_mode=expert_mode,
+            )
+
+            with st.expander(
+                "عرض الجدول المختصر",
+                expanded=False,
+            ):
+
+                table_view = filtered[
+                    [
+                        "analysis_date",
+                        "status",
+                        "disease_name",
+                        "confidence",
+                        "detected_objects",
+                        "user_feedback",
+                    ]
+                ].copy()
+
+                table_view[
+                    "status"
+                ] = (
+                    table_view[
+                        "status"
+                    ]
+                    .map(
+                        STATUS_AR
+                    )
+                    .fillna(
+                        table_view[
+                            "status"
+                        ]
+                    )
+                )
+
+                table_view[
+                    "disease_name"
+                ] = (
+                    table_view[
+                        "disease_name"
+                    ]
+                    .fillna(
+                        "-"
+                    )
+                    .apply(
+                        disease_name_ar
+                    )
+                )
+
+                table_view[
+                    "confidence"
+                ] = (
+                    table_view[
+                        "confidence"
+                    ]
+                    .fillna(
+                        0
+                    )
+                    .mul(
+                        100
+                    )
+                    .round(
+                        2
+                    )
+                )
+
+                table_view = table_view.rename(
+                    columns={
+                        "analysis_date":
+                            "التاريخ",
+                        "status":
+                            "الحالة",
+                        "disease_name":
+                            "المرض",
+                        "confidence":
+                            "الثقة %",
+                        "detected_objects":
+                            "المناطق",
+                        "user_feedback":
+                            "التقييم",
+                    }
+                )
+
+                st.dataframe(
+                    table_view,
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
 
 elif page == "عن النظام":
+
     st.markdown(
         """
-        <div class="soft-card">
-            <h2 style="margin-top:0;color:#d92f68">عن Farmer Eye AI 🍓</h2>
+        <div class="card">
+            <h2 style="margin-top:0;color:#c91f59">
+                عن عين المزارع
+            </h2>
             <p>
-                نظام ذكي للكشف المبكر عن أمراض الفراولة باستخدام
-                Instance Segmentation مع تفسير بصري للقرار عبر Grad-CAM.
+                نظام ذكي للمساعدة في الكشف المبكر عن أمراض الفراولة
+                من خلال تحليل الصور وتحديد مواضع الإصابة.
+            </p>
+            <p class="subtle">
+                النتائج مساعدة لاتخاذ قرار أولي، ولا تغني عن الفحص الميداني
+                عند وجود إصابة شديدة أو أعراض غير واضحة.
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.write("")
+    if expert_mode:
 
-    cols = st.columns(4)
-    cols[0].metric("النموذج", "YOLO11n-seg")
-    cols[1].metric("Input Size", "640 × 640")
-    cols[2].metric("Confidence", "50%")
-    cols[3].metric("Classes", len(MODEL_NAMES))
+        st.write("")
 
-    class_table = pd.DataFrame(
-        [
-            {
-                "Class": class_name,
-                "Arabic": DISEASE_AR.get(
-                    class_name,
-                    class_name,
-                ),
-            }
-            for class_name in MODEL_NAMES.values()
-        ]
-    )
+        with st.expander(
+            "التفاصيل التقنية",
+            expanded=False,
+        ):
 
-    st.markdown("### الفئات المدعومة")
-    st.dataframe(
-        class_table,
-        use_container_width=True,
-        hide_index=True,
-    )
+            st.write(
+                "Model: YOLO11n-seg"
+            )
+
+            st.write(
+                "Input Size: 640 × 640"
+            )
+
+            st.write(
+                "Confidence Threshold: 50%"
+            )
+
+            st.write(
+                "Explainability: Multi-Layer Grad-CAM"
+            )
+
+            st.write(
+                f"Classes: {len(MODEL_NAMES)}"
+            )
+
+            class_table = pd.DataFrame(
+                [
+                    {
+                        "Class":
+                            class_name,
+                        "Arabic":
+                            DISEASE_AR.get(
+                                class_name,
+                                class_name,
+                            ),
+                    }
+                    for class_name
+                    in MODEL_NAMES.values()
+                ]
+            )
+
+            st.dataframe(
+                class_table,
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 st.markdown(
     """
     <div class="footer">
-        🍓 Farmer Eye AI • Strawberry Disease Detection • YOLO11n-seg
+        🍓 عين المزارع • Farmer Eye AI
     </div>
     """,
     unsafe_allow_html=True,
