@@ -2,6 +2,7 @@ streamlit>=1.38
 ultralytics==8.4.116
 torch
 torchvision
+opencv-python-headless
 numpy
 pandas
 Pillow
