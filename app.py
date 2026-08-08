@@ -1,6 +1,9 @@
 
+import io
 import sys
 import time
+import zipfile
+from html import escape
 from pathlib import Path
 
 import cv2
@@ -507,6 +510,229 @@ def existing_path(value):
         return None
 
 
+
+def build_printable_report_html(
+    *,
+    title,
+    status,
+    disease_name,
+    confidence,
+    detected_objects,
+    analysis_date="-",
+    recommendation="-",
+    image_name="-",
+):
+    status_ar = STATUS_AR.get(
+        str(status),
+        str(status),
+    )
+
+    disease_ar = (
+        disease_name_ar(
+            disease_name
+        )
+        if disease_name
+        else (
+            "فراولة سليمة"
+            if str(status) == "Healthy"
+            else "-"
+        )
+    )
+
+    html = f"""
+    <!doctype html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="utf-8">
+        <title>{escape(str(title))}</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                direction: rtl;
+                margin: 40px;
+                color: #25364d;
+                background: #ffffff;
+            }}
+            .header {{
+                border-bottom: 4px solid #e93672;
+                padding-bottom: 14px;
+                margin-bottom: 24px;
+            }}
+            h1 {{
+                color: #c91f59;
+                margin: 0 0 8px 0;
+            }}
+            .grid {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+                margin: 20px 0;
+            }}
+            .card {{
+                border: 1px solid #ecd6df;
+                border-radius: 14px;
+                padding: 14px;
+                background: #fff8fb;
+            }}
+            .label {{
+                color: #7a6971;
+                font-size: 13px;
+                margin-bottom: 6px;
+            }}
+            .value {{
+                font-size: 19px;
+                font-weight: 700;
+            }}
+            .recommendation {{
+                margin-top: 20px;
+                border: 1px solid #efd6ad;
+                border-radius: 14px;
+                padding: 16px;
+                background: #fffaf0;
+                line-height: 1.8;
+            }}
+            .note {{
+                margin-top: 28px;
+                color: #777;
+                font-size: 12px;
+                line-height: 1.7;
+            }}
+            @media print {{
+                button {{
+                    display: none;
+                }}
+                body {{
+                    margin: 20px;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>عين المزارع - تقرير فحص</h1>
+            <div>Farmer Eye AI</div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="label">الحالة</div>
+                <div class="value">{escape(status_ar)}</div>
+            </div>
+
+            <div class="card">
+                <div class="label">التشخيص</div>
+                <div class="value">{escape(str(disease_ar))}</div>
+            </div>
+
+            <div class="card">
+                <div class="label">درجة الثقة</div>
+                <div class="value">{float(confidence) * 100:.2f}%</div>
+            </div>
+
+            <div class="card">
+                <div class="label">المناطق المكتشفة</div>
+                <div class="value">{int(detected_objects or 0)}</div>
+            </div>
+
+            <div class="card">
+                <div class="label">تاريخ الفحص</div>
+                <div class="value">{escape(str(analysis_date))}</div>
+            </div>
+
+            <div class="card">
+                <div class="label">اسم الصورة</div>
+                <div class="value">{escape(str(image_name))}</div>
+            </div>
+        </div>
+
+        <div class="recommendation">
+            <strong>الإرشاد المقترح</strong><br>
+            {escape(str(recommendation))}
+        </div>
+
+        <div class="note">
+            هذا التقرير أداة مساعدة لاتخاذ قرار أولي ولا يغني عن الفحص الميداني
+            بواسطة مهندس زراعي عند وجود إصابة شديدة أو أعراض غير واضحة.
+        </div>
+    </body>
+    </html>
+    """
+
+    return html
+
+
+def extract_zip_images(
+    uploaded_zip
+):
+    extract_root = (
+        TEMP_DIR /
+        f"zip_{time.time_ns()}"
+    )
+
+    extract_root.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    supported = {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".bmp",
+        ".webp",
+    }
+
+    image_paths = []
+
+    with zipfile.ZipFile(
+        io.BytesIO(
+            uploaded_zip.getvalue()
+        )
+    ) as archive:
+
+        for member in archive.infolist():
+
+            if member.is_dir():
+                continue
+
+            member_path = Path(
+                member.filename
+            )
+
+            if (
+                member_path.suffix.lower()
+                not in supported
+            ):
+                continue
+
+            safe_name = (
+                f"{time.time_ns()}_"
+                f"{member_path.name}"
+            )
+
+            target = (
+                extract_root /
+                safe_name
+            )
+
+            with archive.open(
+                member
+            ) as source, open(
+                target,
+                "wb"
+            ) as destination:
+
+                destination.write(
+                    source.read()
+                )
+
+            image_paths.append(
+                target
+            )
+
+    return image_paths
+
+
 def build_gradcam(result):
     if result["status"] == "Uncertain":
         return None
@@ -776,6 +1002,28 @@ def show_result(result, expert_mode=False):
             )
 
     if expert_mode:
+        report_html = build_printable_report_html(
+            title="Farmer Eye AI Report",
+            status=result["status"],
+            disease_name=result["disease_name"],
+            confidence=result["confidence"],
+            detected_objects=result["detected_objects"],
+            analysis_date="الفحص الحالي",
+            recommendation=recommendation,
+            image_name=result["image_name"],
+        )
+
+        st.download_button(
+            "تحميل تقرير الفحص للطباعة",
+            data=report_html.encode("utf-8"),
+            file_name=(
+                f"farmer_eye_report_"
+                f"{result['prediction_id'] or 'current'}.html"
+            ),
+            mime="text/html",
+            use_container_width=True,
+        )
+
         with st.expander(
             "التفاصيل التقنية",
             expanded=False,
@@ -971,6 +1219,60 @@ def render_history_details(row, expert_mode=False):
             )
 
 
+    if expert_mode:
+
+        row_recommendation = RECOMMENDATIONS_AR.get(
+            str(
+                row.get(
+                    "disease_name",
+                    ""
+                )
+                or
+                "Healthy Strawberry"
+            ).split(",")[0].strip(),
+            "راجع الحالة ميدانيًا إذا استمرت الأعراض أو توسعت الإصابة.",
+        )
+
+        report_html = build_printable_report_html(
+            title="Farmer Eye AI Historical Report",
+            status=status,
+            disease_name=disease,
+            confidence=confidence,
+            detected_objects=(
+                row.get(
+                    "detected_objects",
+                    0
+                )
+                or
+                0
+            ),
+            analysis_date=row.get(
+                "analysis_date",
+                "-"
+            ),
+            recommendation=row_recommendation,
+            image_name=row.get(
+                "image_name",
+                "-"
+            ),
+        )
+
+        st.download_button(
+            "تحميل التقرير للطباعة",
+            data=report_html.encode("utf-8"),
+            file_name=(
+                f"farmer_eye_history_"
+                f"{int(row.get('id', 0))}.html"
+            ),
+            mime="text/html",
+            key=(
+                f"history_report_"
+                f"{int(row.get('id', 0))}"
+            ),
+            use_container_width=True,
+        )
+
+
 # ==============================================================================
 # Sidebar
 # ==============================================================================
@@ -1144,18 +1446,23 @@ elif page == "فحص صورة":
         <div class="section-title">
             <h3>فحص صورة فراولة</h3>
             <span class="subtle">
-                صورة واحدة واضحة تعطي أفضل نتيجة
+                ارفع صورة أو التقط صورة مباشرة بالكاميرا
             </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    upload_col, tips_col = st.columns(
-        [1.35, .65]
+    source_tab1, source_tab2 = st.tabs(
+        [
+            "رفع صورة",
+            "التقاط بالكاميرا",
+        ]
     )
 
-    with upload_col:
+    uploaded_file = None
+
+    with source_tab1:
 
         uploaded_file = st.file_uploader(
             "اختر صورة",
@@ -1169,12 +1476,27 @@ elif page == "فحص صورة":
             label_visibility="collapsed",
         )
 
+    with source_tab2:
+
+        camera_file = st.camera_input(
+            "التقط صورة واضحة للثمرة أو الورقة"
+        )
+
+        if camera_file is not None:
+            uploaded_file = camera_file
+
+    upload_col, tips_col = st.columns(
+        [1.25, .75]
+    )
+
+    with upload_col:
+
         if uploaded_file:
 
             st.image(
                 uploaded_file,
                 caption="الصورة المختارة",
-                use_container_width=True,
+                width=460,
             )
 
             if st.button(
@@ -1198,6 +1520,12 @@ elif page == "فحص صورة":
                 st.session_state[
                     "single_result"
                 ] = result
+
+        else:
+
+            st.info(
+                "اختر صورة من الجهاز أو استخدم الكاميرا."
+            )
 
     with tips_col:
 
@@ -1238,33 +1566,117 @@ elif page == "فحص مجموعة صور":
         <div class="section-title">
             <h3>فحص مجموعة صور</h3>
             <span class="subtle">
-                مناسب لمراجعة عدة نباتات أو ثمار دفعة واحدة
+                ارفع صور متعددة أو مجلد صور كامل
             </span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    uploaded_files = st.file_uploader(
-        "اختر الصور",
-        type=[
-            "jpg",
-            "jpeg",
-            "png",
-            "bmp",
-            "webp",
-        ],
-        accept_multiple_files=True,
+    batch_tab1, batch_tab2, batch_tab3 = st.tabs(
+        [
+            "اختيار صور متعددة",
+            "اختيار مجلد كامل",
+            "رفع مجلد ZIP",
+        ]
     )
 
-    if uploaded_files:
+    selected_files = []
+    selected_paths = []
+
+    with batch_tab1:
+
+        manual_files = st.file_uploader(
+            "اختر عدة صور",
+            type=[
+                "jpg",
+                "jpeg",
+                "png",
+                "bmp",
+                "webp",
+            ],
+            accept_multiple_files=True,
+            key="batch_manual",
+        )
+
+        if manual_files:
+            selected_files.extend(
+                manual_files
+            )
+
+    with batch_tab2:
+
+        try:
+            folder_files = st.file_uploader(
+                "اختر مجلد الصور",
+                type=[
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "bmp",
+                    "webp",
+                ],
+                accept_multiple_files="directory",
+                key="batch_directory",
+            )
+
+            if folder_files:
+                selected_files.extend(
+                    folder_files
+                )
+
+        except Exception:
+
+            st.info(
+                "اختيار المجلد غير مدعوم في هذا المتصفح. "
+                "استخدم تبويب ZIP بدلًا منه."
+            )
+
+    with batch_tab3:
+
+        zip_file = st.file_uploader(
+            "ارفع ملف ZIP يحتوي على الصور",
+            type=[
+                "zip",
+            ],
+            key="batch_zip",
+        )
+
+        if zip_file is not None:
+
+            try:
+                selected_paths = extract_zip_images(
+                    zip_file
+                )
+
+                st.success(
+                    f"تم العثور على {len(selected_paths)} صورة داخل الملف."
+                )
+
+            except zipfile.BadZipFile:
+
+                st.error(
+                    "ملف ZIP غير صالح."
+                )
+
+    total_selected = (
+        len(
+            selected_files
+        )
+        +
+        len(
+            selected_paths
+        )
+    )
+
+    if total_selected:
 
         st.info(
-            f"تم اختيار {len(uploaded_files)} صورة."
+            f"إجمالي الصور الجاهزة للفحص: {total_selected}"
         )
 
     if (
-        uploaded_files
+        total_selected
         and
         st.button(
             "ابدأ فحص المجموعة",
@@ -1278,19 +1690,82 @@ elif page == "فحص مجموعة صور":
             0
         )
 
-        for index, uploaded_file in enumerate(
-            uploaded_files
-        ):
+        all_items = []
 
-            image_path = save_upload(
-                uploaded_file
+        for uploaded_file in selected_files:
+            all_items.append(
+                (
+                    "upload",
+                    uploaded_file
+                )
             )
 
-            results.append(
-                analyze_image(
-                    image_path,
-                    save_to_database=True,
+        for image_path in selected_paths:
+            all_items.append(
+                (
+                    "path",
+                    image_path
                 )
+            )
+
+        for index, (
+            source_type,
+            source_value
+        ) in enumerate(
+            all_items
+        ):
+
+            if source_type == "upload":
+
+                image_path = save_upload(
+                    source_value
+                )
+
+            else:
+
+                image_path = Path(
+                    source_value
+                )
+
+            result = analyze_image(
+                image_path,
+                save_to_database=True,
+            )
+
+            result[
+                "batch_gradcam_path"
+            ] = None
+
+            if (
+                result[
+                    "status"
+                ]
+                !=
+                "Uncertain"
+            ):
+
+                try:
+
+                    gradcam_result = build_gradcam(
+                        result
+                    )
+
+                    if gradcam_result:
+
+                        result[
+                            "batch_gradcam_path"
+                        ] = gradcam_result[
+                            "gradcam_path"
+                        ]
+
+                except Exception:
+
+                    result[
+                        "batch_gradcam_path"
+                    ] = None
+
+            results.append(
+                result
             )
 
             progress.progress(
@@ -1299,7 +1774,7 @@ elif page == "فحص مجموعة صور":
                 )
                 /
                 len(
-                    uploaded_files
+                    all_items
                 )
             )
 
@@ -1317,53 +1792,168 @@ elif page == "فحص مجموعة صور":
         ]
 
         st.markdown(
-            "### النتائج"
+            "### نتائج المجموعة"
         )
 
         for index, result in enumerate(
             results
         ):
 
+            status_text = STATUS_AR.get(
+                result[
+                    "status"
+                ],
+                result[
+                    "status"
+                ],
+            )
+
+            disease_text = disease_name_ar(
+                result[
+                    "disease_name"
+                ]
+            )
+
             with st.expander(
                 (
                     f"{index + 1}. "
-                    f"{STATUS_AR.get(result['status'], result['status'])}"
+                    f"{status_text}"
                     f" - "
-                    f"{disease_name_ar(result['disease_name'])}"
+                    f"{disease_text}"
+                    f" - "
+                    f"{result['confidence_percentage']:.1f}%"
                 ),
-                expanded=False,
+                expanded=(
+                    index == 0
+                ),
             ):
 
-                preview_cols = st.columns(
-                    [1, 1.4]
+                info_col, image_col = st.columns(
+                    [.8, 1.2]
                 )
 
-                with preview_cols[0]:
+                with info_col:
+
+                    st.metric(
+                        "درجة الثقة",
+                        f"{result['confidence_percentage']:.2f}%",
+                    )
+
+                    st.write(
+                        f"**الحالة:** {status_text}"
+                    )
+
+                    st.write(
+                        f"**المرض:** {disease_text}"
+                    )
+
+                    st.write(
+                        f"**المناطق المكتشفة:** "
+                        f"{result['detected_objects']}"
+                    )
+
+                    st.write(
+                        f"**الإرشاد:** "
+                        f"{recommendation_for(result)}"
+                    )
+
+                with image_col:
 
                     st.image(
                         result[
                             "original_image_path"
                         ],
+                        width=420,
+                    )
+
+                result_tabs = st.tabs(
+                    [
+                        "الصورة الأصلية",
+                        "أماكن الإصابة",
+                        (
+                            "Grad-CAM"
+                            if expert_mode
+                            else
+                            "تفسير التشخيص"
+                        ),
+                    ]
+                )
+
+                with result_tabs[0]:
+
+                    st.image(
+                        result[
+                            "original_image_path"
+                        ],
+                        width=520,
+                    )
+
+                with result_tabs[1]:
+
+                    st.image(
+                        result[
+                            "prediction_image_path"
+                        ],
+                        width=520,
+                    )
+
+                with result_tabs[2]:
+
+                    batch_gradcam_path = result.get(
+                        "batch_gradcam_path"
+                    )
+
+                    if (
+                        batch_gradcam_path
+                        and
+                        Path(
+                            batch_gradcam_path
+                        ).exists()
+                    ):
+
+                        st.image(
+                            batch_gradcam_path,
+                            width=520,
+                        )
+
+                        if not expert_mode:
+
+                            st.caption(
+                                "المناطق المضيئة هي الأجزاء التي ركز عليها النظام أثناء التشخيص."
+                            )
+
+                    else:
+
+                        st.info(
+                            "التفسير البصري غير متاح لهذه الصورة."
+                        )
+
+                if expert_mode:
+
+                    report_html = build_printable_report_html(
+                        title="Farmer Eye AI Batch Report",
+                        status=result["status"],
+                        disease_name=result["disease_name"],
+                        confidence=result["confidence"],
+                        detected_objects=result["detected_objects"],
+                        analysis_date="فحص مجموعة",
+                        recommendation=recommendation_for(result),
+                        image_name=result["image_name"],
+                    )
+
+                    st.download_button(
+                        "تحميل تقرير هذه الصورة للطباعة",
+                        data=report_html.encode("utf-8"),
+                        file_name=(
+                            f"farmer_eye_report_"
+                            f"{result['prediction_id']}.html"
+                        ),
+                        mime="text/html",
+                        key=(
+                            f"batch_report_"
+                            f"{result['prediction_id']}"
+                        ),
                         use_container_width=True,
-                    )
-
-                with preview_cols[1]:
-
-                    st.metric(
-                        "الثقة",
-                        f"{result['confidence_percentage']:.2f}%",
-                    )
-
-                    st.write(
-                        f"الحالة: {STATUS_AR.get(result['status'], result['status'])}"
-                    )
-
-                    st.write(
-                        f"المرض: {disease_name_ar(result['disease_name'])}"
-                    )
-
-                    st.write(
-                        f"المناطق: {result['detected_objects']}"
                     )
 
 
